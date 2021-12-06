@@ -23,6 +23,7 @@
 : ${OSHT_STDIO=$($OSHT_MKTEMP)}
 : ${OSHT_VERBOSE=}
 : ${OSHT_WATCH=}
+: ${OSHT_OVERRIDE_TRAP=}
 
 : ${_OSHT_CURRENT_TEST_FILE=$($OSHT_MKTEMP)}
 : ${_OSHT_CURRENT_TEST=0}
@@ -100,10 +101,22 @@ function _osht_cleanup {
     exit $rv
 }
 
-trap _osht_cleanup INT TERM EXIT
+appendTrap() {
+    HANDLER=$1
+    shift
+    SIGNALS="$*"
+    eval "set -- $(trap -p ${SIGNALS})"
+    trap -- "${3}${3:+;}${HANDLER}" ${SIGNALS}
+}
+
+if [ -n "$OSHT_OVERRIDE_TRAP" ]; then
+	trap _osht_cleanup INT TERM EXIT
+else
+	appendTrap _osht_cleanup INT TERM EXIT
+fi
 
 function _osht_xmlencode {
-    sed -e 's/\&/\&amp;/g' -e 's/\"/\&quot;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' 
+    sed -e 's/\&/\&amp;/g' -e 's/\"/\&quot;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'//g" # -e "s/'/\&apos;/g"
 }
 
 function _osht_strip_terminal_escape {
@@ -121,7 +134,8 @@ function _osht_timestamp {
 function _osht_init_junit {
     cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites failures="$(_osht_failed)" name="$0" tests="$_OSHT_PLANNED_TESTS" time="$SECONDS" timestamp="$(_osht_timestamp)" >
+<testsuites>
+<testsuite failures="$(_osht_failed)" name="$0" tests="$_OSHT_PLANNED_TESTS" time="$SECONDS" timestamp="$(_osht_timestamp)" >
 EOF
 }
 
@@ -147,6 +161,7 @@ EOF
 
 function _osht_end_junit {
     cat <<EOF
+</testsuite>
 </testsuites>
 EOF
 }
